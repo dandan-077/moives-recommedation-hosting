@@ -6,19 +6,29 @@ import requests
 import json
 import os
 
+# File for storing user data
+USER_DB = "users.json"
+
+# Ensure users.json exists
+if not os.path.exists(USER_DB):
+    with open(USER_DB, "w") as f:
+        json.dump({}, f)  # Initialize with an empty dictionary
+
 # Load movie dataset
-movies = pd.read_csv("tmdb_movies_data.csv")  # Update path to your dataset
+movies = pd.read_csv("tmdb_movies_data.csv")  # Ensure this file is in the same directory
 
 # Preprocess the data
-movies['genres'] = movies['genres'].fillna('').apply(lambda x: x.replace(' ', '').replace('|', ' '))
-movies['cast'] = movies['cast'].fillna('').apply(lambda x: ' '.join(x.split(',')[:3]))  # Top 3 actors
-movies['director'] = movies['director'].fillna('')
-movies['keywords'] = movies['keywords'].fillna('')
-movies['combined_features'] = (movies['genres'] + " " + movies['cast'] + " " + movies['director'] + " " + movies['keywords'])
+movies["genres"] = movies["genres"].fillna("").apply(lambda x: x.replace(" ", "").replace("|", " "))
+movies["cast"] = movies["cast"].fillna("").apply(lambda x: " ".join(x.split(",")[:3]))  # Top 3 actors
+movies["director"] = movies["director"].fillna("")
+movies["keywords"] = movies["keywords"].fillna("")
+movies["combined_features"] = (
+    movies["genres"] + " " + movies["cast"] + " " + movies["director"] + " " + movies["keywords"]
+)
 
 # CountVectorizer for feature extraction
-cv = CountVectorizer(stop_words='english')
-count_matrix = cv.fit_transform(movies['combined_features'])
+cv = CountVectorizer(stop_words="english")
+count_matrix = cv.fit_transform(movies["combined_features"])
 
 # TMDb API configuration
 TMDB_API_KEY = "3c56e04d763dc09cecbc7424e0e65636"  # Replace with your actual API key
@@ -31,9 +41,9 @@ def get_movie_details(movie_id):
         response = requests.get(url)
         data = response.json()
 
-        poster_url = TMDB_IMAGE_URL + data.get('poster_path', '') if data.get('poster_path') else None
-        genres = ", ".join([genre['name'] for genre in data.get('genres', [])])
-        summary = data.get('overview', 'No summary available.')
+        poster_url = TMDB_IMAGE_URL + data.get("poster_path", "") if data.get("poster_path") else None
+        genres = ", ".join([genre["name"] for genre in data.get("genres", [])])
+        summary = data.get("overview", "No summary available.")
 
         # Fetch top cast
         credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?api_key={TMDB_API_KEY}"
@@ -41,10 +51,10 @@ def get_movie_details(movie_id):
         credits_data = credits_response.json()
         top_cast = [
             {
-                'name': actor['name'],
-                'photo': TMDB_IMAGE_URL + actor['profile_path'] if actor.get('profile_path') else None
+                "name": actor["name"],
+                "photo": TMDB_IMAGE_URL + actor["profile_path"] if actor.get("profile_path") else None,
             }
-            for actor in credits_data.get('cast', [])[:3]
+            for actor in credits_data.get("cast", [])[:3]
         ]
 
         return poster_url, genres, summary, top_cast
@@ -54,7 +64,7 @@ def get_movie_details(movie_id):
 
 # Movie recommendation function
 def get_recommendations(user_preferences, num_recommendations=5):
-    user_features = user_preferences['genres'] + " " + user_preferences['actors'] + " " + user_preferences['director']
+    user_features = user_preferences["genres"] + " " + user_preferences["actors"] + " " + user_preferences["director"]
     user_vector = cv.transform([user_features])
     cosine_sim = cosine_similarity(user_vector, count_matrix)
     similarity_scores = list(enumerate(cosine_sim[0]))
@@ -62,25 +72,37 @@ def get_recommendations(user_preferences, num_recommendations=5):
     top_movies_indices = [i[0] for i in sorted_scores[:num_recommendations]]
     return movies.iloc[top_movies_indices]
 
-# Simulated user database
-USER_DB = 'users.json'
-
+# Register User
 def register_user(username, password, preferences):
-    if not os.path.exists(USER_DB):
-        with open(USER_DB, 'w') as f:
-            json.dump({}, f)
-    with open(USER_DB, 'r') as f:
-        users = json.load(f)
-    users[username] = {'password': password, 'preferences': preferences}
-    with open(USER_DB, 'w') as f:
-        json.dump(users, f)
+    # Load existing users
+    with open(USER_DB, "r") as f:
+        try:
+            users = json.load(f)
+        except json.JSONDecodeError:
+            users = {}
 
+    # Check for unique username
+    if username in users:
+        return False  # Username already exists
+
+    # Add user
+    users[username] = {"password": password, "preferences": preferences}
+
+    # Save updated users
+    with open(USER_DB, "w") as f:
+        json.dump(users, f, indent=4)
+    return True
+
+# Check User
 def check_user(username, password):
-    if not os.path.exists(USER_DB):
-        return False
-    with open(USER_DB, 'r') as f:
-        users = json.load(f)
-    return users.get(username) and users[username]['password'] == password
+    with open(USER_DB, "r") as f:
+        try:
+            users = json.load(f)
+        except json.JSONDecodeError:
+            return False  # Return False if file is invalid
+
+    # Validate username and password
+    return username in users and users[username]["password"] == password
 
 # Display movie details
 def display_movie_details(movie_id, title):
@@ -96,9 +118,9 @@ def display_movie_details(movie_id, title):
         st.markdown("#### Top Cast")
         cols = st.columns(len(top_cast))
         for col, actor in zip(cols, top_cast):
-            if actor['photo']:
-                col.image(actor['photo'], width=100)
-            col.caption(actor['name'])
+            if actor["photo"]:
+                col.image(actor["photo"], width=100)
+            col.caption(actor["name"])
     else:
         st.write("No cast information available.")
     st.divider()
@@ -106,7 +128,7 @@ def display_movie_details(movie_id, title):
 # Streamlit UI
 st.title("Movie Recommendation System")
 
-if 'logged_in' not in st.session_state:
+if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
@@ -117,10 +139,13 @@ if not st.session_state.logged_in:
         password = st.text_input("Enter Password", type="password")
         confirm_password = st.text_input("Confirm Password", type="password")
         if password == confirm_password:
-            preferences = {'genres': '', 'actors': '', 'director': ''}
+            preferences = {"genres": "", "actors": "", "director": ""}
             if st.button("Register"):
-                register_user(username, password, preferences)
-                st.success("Account created successfully!")
+                success = register_user(username, password, preferences)
+                if success:
+                    st.success("Account created successfully!")
+                else:
+                    st.error("Username already exists. Please choose another one.")
         else:
             st.error("Passwords do not match.")
     elif option == "Login":
@@ -136,38 +161,51 @@ if not st.session_state.logged_in:
 
 if st.session_state.logged_in:
     user = st.session_state.username
-    with open(USER_DB, 'r') as f:
+    with open(USER_DB, "r") as f:
         users = json.load(f)
-    user_preferences = users[user]['preferences']
+    user_preferences = users[user]["preferences"]
 
     search_query = st.text_input("Search for a movie by name", key="search")
     if search_query:
-        search_results = movies[movies['original_title'].str.contains(search_query, case=False, na=False)]
+        search_results = movies[movies["original_title"].str.contains(search_query, case=False, na=False)]
         if not search_results.empty:
             st.write("### Search Results:")
             for _, row in search_results.iterrows():
-                display_movie_details(row['id'], row['original_title'])
+                display_movie_details(row["id"], row["original_title"])
         else:
             st.write("No results found.")
 
     show_preferences = st.checkbox("Update Preferences")
     if show_preferences:
-        genres = st.multiselect("Select Genres", options= ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Foreign', 'History', 'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 'TV Movie', 'Thriller', 'War', 'Western'])
+        genres = st.multiselect(
+            "Select Genres",
+            options=[
+                "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
+                "Drama", "Family", "Fantasy", "Foreign", "History", "Horror",
+                "Music", "Mystery", "Romance", "Science Fiction", "TV Movie",
+                "Thriller", "War", "Western",
+            ],
+        )
         actors = st.text_input("Enter Favorite Actors (comma-separated)")
         director = st.text_input("Enter Favorite Director")
+
         if st.button("Update Preferences"):
-            user_preferences = {'genres': ' '.join(genres), 'actors': actors, 'director': director}
-            users[user]['preferences'] = user_preferences
-            with open(USER_DB, 'w') as f:
-                json.dump(users, f)
+            # Update preferences in the JSON file
+            users[user]["preferences"] = {
+                "genres": " ".join(genres),
+                "actors": actors,
+                "director": director,
+            }
+            with open(USER_DB, "w") as f:
+                json.dump(users, f, indent=4)
             st.success("Preferences updated!")
 
     st.write("### Movie Recommendations:")
-    num_movies_to_show = st.session_state.get('num_movies', 5)
+    num_movies_to_show = st.session_state.get("num_movies", 5)
     recommended_movies = get_recommendations(user_preferences, num_recommendations=num_movies_to_show)
 
     for _, row in recommended_movies.iterrows():
-        display_movie_details(row['id'], row['original_title'])
+        display_movie_details(row["id"], row["original_title"])
 
     if st.button("Load More"):
         st.session_state.num_movies = num_movies_to_show + 5
