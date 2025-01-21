@@ -152,7 +152,7 @@ if st.session_state.logged_in:
 
     show_preferences = st.checkbox("Update Preferences")
     if show_preferences:
-        genres = st.multiselect("Select Genres", options=["Action", "Sci-Fi", "Drama", "Comedy", "Thriller", "Mystery"])
+        genres = st.multiselect("Select Genres", options= ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Foreign', 'History', 'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 'TV Movie', 'Thriller', 'War', 'Western'])
         actors = st.text_input("Enter Favorite Actors (comma-separated)")
         director = st.text_input("Enter Favorite Director")
         if st.button("Update Preferences"):
